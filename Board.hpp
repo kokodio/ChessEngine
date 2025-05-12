@@ -1,7 +1,6 @@
 #pragma once
 #include <cstdint>
 #include <cstring>
-#include <cstdlib>
 #include <array>
 #include <cmath>
 #include <iostream>
@@ -10,20 +9,11 @@
 #include "Hash_Fancy.hpp"
 #include "Random.hpp"
 
+#define count_bits(bitboard) __builtin_popcountll(bitboard)
+#define get_ls1b_index(bitboard) __builtin_ctzll(bitboard)
+#define bitloop(X) for(; X; X &= X - 1)
 
 namespace ChessBoard {
-#define count_bits(bitboard) __builtin_popcountll(bitboard)
-#define IsSlider(attacker, square) (attacker & ~king_attacks[square] & ~knight_attacks[square])
-#define opponent_slider_rays_to_square(attacker, square) (line_between[get_ls1b_index(attacker)][king_square])
-#define get_ls1b_index(bitboard) __builtin_ctzll(bitboard)
-#define Bitloop(X) for(;X; X = X&=X-1)
-#define bPawnsAble2Push(wpawns, empty) (nortOne(empty) & (wpawns))
-#define wPawnsAble2Push(wpawns, empty) (soutOne(empty) & (wpawns))
-#define wPawnsAblePromotePush(wpawns, empty) (wPawnsAble2Push((wpawns), (empty)) & 0x000000000000FF00)
-#define bPawnsAblePromotePush(wpawns, empty) (bPawnsAble2Push((wpawns), (empty)) & 0x00FF000000000000)
-#define soutOne(b) ((b) << 8)
-#define nortOne(b) ((b) >> 8)
-
     using U64 = uint64_t;
 
     enum class Side : int { WHITE = 0, BLACK = 1, BOTH = 2 };
@@ -34,7 +24,7 @@ namespace ChessBoard {
         NO_PIECE = 12,
     };
 
-    constexpr inline std::array<int, 64> castling_rights = {
+    static constexpr inline std::array castling_rights = {
         7, 15, 15, 15, 3, 15, 15, 11,
         15, 15, 15, 15, 15, 15, 15, 15,
         15, 15, 15, 15, 15, 15, 15, 15,
@@ -59,6 +49,14 @@ namespace ChessBoard {
         no_sq
     };
 
+#define bPawnsAble2Push(wpawns, empty) (nortOne(empty) & (wpawns))
+#define wPawnsAble2Push(wpawns, empty) (soutOne(empty) & (wpawns))
+#define wPawnsAblePromotePush(wpawns, empty) (wPawnsAble2Push((wpawns), (empty)) & 0x000000000000FF00)
+#define bPawnsAblePromotePush(wpawns, empty) (bPawnsAble2Push((wpawns), (empty)) & 0x00FF000000000000)
+#define soutOne(b) ((b) << 8)
+#define nortOne(b) ((b) >> 8)
+
+
     static inline constexpr U64 wPawnsAble2DblPush(U64 wpawns, U64 empty) {
         return wPawnsAble2Push(wpawns, soutOne(empty & 0x000000FF00000000) & empty);
     }
@@ -67,10 +65,10 @@ namespace ChessBoard {
         return bPawnsAble2Push(wpawns, nortOne(empty & 0x00000000FF000000) & empty);
     }
 
-    constexpr U64 not_a_file = 18374403900871474942ULL;
-    constexpr U64 not_h_file = 9187201950435737471ULL;
-    constexpr U64 not_hg_file = 4557430888798830399ULL;
-    constexpr U64 not_ab_file = 18229723555195321596ULL;
+    static constexpr U64 not_a_file = 18374403900871474942ULL;
+    static constexpr U64 not_h_file = 9187201950435737471ULL;
+    static constexpr U64 not_hg_file = 4557430888798830399ULL;
+    static constexpr U64 not_ab_file = 18229723555195321596ULL;
 
     static inline constexpr void set_bit(U64 &bitboard, const int square) {
         bitboard |= (1ULL << square);
@@ -84,7 +82,7 @@ namespace ChessBoard {
         (bitboard) &= ~(1ULL << (square));
     }
 
-    constexpr U64 mask_pawn_attacks(const Side side, const int square) {
+    static constexpr U64 mask_pawn_attacks(const Side side, const int square) {
         U64 attacks = 0ULL;
         U64 bitboard = 0ULL;
         set_bit(bitboard, square);
@@ -99,7 +97,7 @@ namespace ChessBoard {
         return attacks;
     }
 
-    constexpr U64 mask_knight_attacks(const int square) {
+    static constexpr U64 mask_knight_attacks(const int square) {
         U64 attacks = 0ULL;
         U64 bitboard = 1ULL << square;
         set_bit(bitboard, square);
@@ -116,7 +114,7 @@ namespace ChessBoard {
         return attacks;
     }
 
-    constexpr U64 mask_king_attacks(const int square) {
+    static constexpr U64 mask_king_attacks(const int square) {
         U64 attacks = 0ULL;
         U64 bitboard = 0ULL;
         set_bit(bitboard, square);
@@ -133,7 +131,7 @@ namespace ChessBoard {
         return attacks;
     }
 
-    constexpr std::array<U64, 64> generate_knight_attacks_table() {
+    static constexpr std::array<U64, 64> generate_knight_attacks_table() {
         std::array<U64, 64> table{};
         for (int sq = 0; sq < 64; ++sq) {
             table[sq] = mask_knight_attacks(sq);
@@ -141,7 +139,7 @@ namespace ChessBoard {
         return table;
     }
 
-    constexpr std::array<U64, 64> generate_king_attacks_table() {
+    static constexpr std::array<U64, 64> generate_king_attacks_table() {
         std::array<U64, 64> table{};
         for (int sq = 0; sq < 64; ++sq) {
             table[sq] = mask_king_attacks(sq);
@@ -149,7 +147,7 @@ namespace ChessBoard {
         return table;
     }
 
-    constexpr std::array<std::array<U64, 64>, 2> generate_pawn_attacks_table() {
+    static constexpr std::array<std::array<U64, 64>, 2> generate_pawn_attacks_table() {
         std::array<std::array<U64, 64>, 2> table{};
         for (int sq = 0; sq < 64; ++sq) {
             table[static_cast<int>(Side::WHITE)][sq] = mask_pawn_attacks(Side::WHITE, sq);
@@ -158,11 +156,11 @@ namespace ChessBoard {
         return table;
     }
 
-    constexpr auto knight_attacks = generate_knight_attacks_table();
-    constexpr auto king_attacks = generate_king_attacks_table();
-    constexpr auto pawn_attacks = generate_pawn_attacks_table();
+    static constexpr auto knight_attacks = generate_knight_attacks_table();
+    static constexpr auto king_attacks = generate_king_attacks_table();
+    static constexpr auto pawn_attacks = generate_pawn_attacks_table();
 
-    static void print_bitboard(const U64 bitboard) {
+    [[maybe_unused]] static void print_bitboard(const U64 bitboard) {
         printf("\n");
 
         for (int rank = 0; rank < 8; rank++) {
@@ -183,26 +181,15 @@ namespace ChessBoard {
 
     using Move = int32_t;
 
-    constexpr inline int get_move_source(Move move) { return move & 0x3f; }
-    constexpr inline int get_move_target(Move move) { return (move >> 6) & 0x3f; }
-    constexpr inline int get_move_piece(Move move) { return (move >> 12) & 0xf; }
-    constexpr inline int get_move_promoted(Move move) { return (move >> 16) & 0xf; }
-    constexpr inline bool get_move_capture(Move move) { return (move >> 20) & 1; }
-    constexpr inline bool get_move_double(Move move) { return (move >> 21) & 1; }
-    constexpr inline bool get_move_enpassant(Move move) { return (move >> 22) & 1; }
-    constexpr inline bool get_move_castling(Move move) { return (move >> 23) & 1; }
-    constexpr inline bool get_move_attacked(Move move) { return (move >> 24) & 1; }
-
-    static inline int get_move_score(const Move mb) {
-        return 100;
-    }
-
-    static inline int compare_moves(const void *a, const void *b) {
-        const Move *ma = static_cast<const Move *>(a);
-        const Move *mb = static_cast<const Move *>(b);
-
-        return get_move_score(*mb) - get_move_score(*ma);
-    }
+    static constexpr inline int get_move_source(Move move) { return move & 0x3f; }
+    static constexpr inline int get_move_target(Move move) { return (move >> 6) & 0x3f; }
+    static constexpr inline int get_move_piece(Move move) { return (move >> 12) & 0xf; }
+    static constexpr inline int get_move_promoted(Move move) { return (move >> 16) & 0xf; }
+    static constexpr inline bool get_move_capture(Move move) { return (move >> 20) & 1; }
+    static constexpr inline bool get_move_double(Move move) { return (move >> 21) & 1; }
+    static constexpr inline bool get_move_enpassant(Move move) { return (move >> 22) & 1; }
+    static constexpr inline bool get_move_castling(Move move) { return (move >> 23) & 1; }
+    static constexpr inline bool get_move_attacked(Move move) { return (move >> 24) & 1; }
 
     struct MoveList {
         static constexpr size_t MAX_MOVES = 256;
@@ -213,7 +200,6 @@ namespace ChessBoard {
             moves[count++] = move;
         }
 
-        Move *begin() { return moves.data(); }
         Move *end() { return moves.data() + count; }
         [[nodiscard]] const Move *begin() const { return moves.data(); }
         [[nodiscard]] const Move *end() const { return moves.data() + count; }
@@ -231,7 +217,7 @@ namespace ChessBoard {
         U64 hash_key = 0;
     };
 
-    std::unordered_map<char, int> char_pieces = {
+    static std::unordered_map<char, int> char_pieces = {
         {'P', P},
         {'N', N},
         {'B', B},
@@ -246,7 +232,7 @@ namespace ChessBoard {
         {'k', k}
     };
 
-    std::unordered_map<int, char> promoted_pieces = {
+    static std::unordered_map<int, char> promoted_pieces = {
         {Q, 'q'},
         {R, 'r'},
         {B, 'b'},
@@ -257,12 +243,12 @@ namespace ChessBoard {
         {n, 'n'}
     };
 
-    static inline U64 generate_hash_key(const Board &board) {
+    [[maybe_unused]] static inline U64 generate_hash_key(const Board &board) {
         U64 key = 0ULL;
         for (int piece = P; piece <= k; piece++) {
             U64 bitboard = board.bitboards[piece];
             while (bitboard) {
-                int square = get_ls1b_index(bitboard);
+                const int square = get_ls1b_index(bitboard);
                 pop_bit(bitboard, square);
                 key ^= Random::piece_keys[piece][square];
             }
@@ -291,7 +277,7 @@ namespace ChessBoard {
 
         for (int rank = 0; rank < 8; rank++) {
             for (int file = 0; file < 8; file++) {
-                int square = rank * 8 + file;
+                const int square = rank * 8 + file;
 
                 if ((*fen >= 'a' && *fen <= 'z') || (*fen >= 'A' && *fen <= 'Z')) {
                     const int piece = char_pieces.at(*fen);
@@ -301,15 +287,11 @@ namespace ChessBoard {
                     fen++;
                 }
 
-                // match empty square numbers within FEN string
                 if (*fen >= '0' && *fen <= '9') {
-                    // init offset (convert char 0 to int 0)
                     int offset = *fen - '0';
 
-                    // define piece variable
                     int piece = -1;
 
-                    // loop over all piece bitboards
                     for (int bb_piece = 0; bb_piece <= 11; bb_piece++) {
                         if (get_bit(board.bitboards[bb_piece], square))
                             piece = bb_piece;
@@ -374,11 +356,11 @@ namespace ChessBoard {
         board.hash_key = generate_hash_key(board);
     }
 
-    constexpr int sign(const int x) {
+    static constexpr int sign(const int x) {
         return (x > 0) - (x < 0);
     }
 
-    constexpr std::array<std::array<U64, 64>, 64> generate_line_between() {
+    static constexpr std::array<std::array<U64, 64>, 64> generate_line_between() {
         std::array<std::array<U64, 64>, 64> table{};
         for (int s = 0; s < 64; s++) {
             for (int t = 0; t < 64; t++) {
@@ -409,11 +391,11 @@ namespace ChessBoard {
         return table;
     }
 
-    constexpr auto line_between = generate_line_between();
+    static constexpr auto line_between = generate_line_between();
 
     template<Side Us, bool excludeKing>
-    static inline U64 mask_attacked(const Board &board) {
-        constexpr Side Them = (Us == Side::WHITE) ? Side::BLACK : Side::WHITE;
+    static  inline U64 mask_attacked(const Board &board) {
+        //constexpr Side Them = (Us == Side::WHITE) ? Side::BLACK : Side::WHITE;
         constexpr int Pawn = (Us == Side::WHITE) ? P : p;
         constexpr int Knight = (Us == Side::WHITE) ? N : n;
         constexpr int Bishop = (Us == Side::WHITE) ? B : b;
@@ -431,30 +413,30 @@ namespace ChessBoard {
         int square;
 
         U64 pawns = board.bitboards[Pawn];
-        Bitloop(pawns) {
+        bitloop(pawns) {
             square = get_ls1b_index(pawns);
             attacked |= pawn_attacks[static_cast<int>(Us)][square];
         }
 
         U64 knights = board.bitboards[Knight];
-        Bitloop(knights) {
+        bitloop(knights) {
             square = get_ls1b_index(knights);
             attacked |= knight_attacks[square];
         }
 
         U64 bishops = board.bitboards[Bishop] | board.bitboards[Queen];
-        Bitloop(bishops) {
+        bitloop(bishops) {
             square = get_ls1b_index(bishops);
             attacked |= Chess_Lookup::Fancy::GetBishopAttacks(square, occupied);
         }
 
         U64 rooks = board.bitboards[Rook] | board.bitboards[Queen];
-        Bitloop(rooks) {
+        bitloop(rooks) {
             square = get_ls1b_index(rooks);
             attacked |= Chess_Lookup::Fancy::GetRookAttacks(square, occupied);
         }
 
-        U64 king = board.bitboards[King];
+        const U64 king = board.bitboards[King];
         if (king) {
             square = get_ls1b_index(king);
             attacked |= king_attacks[square];
@@ -465,21 +447,21 @@ namespace ChessBoard {
 
     template<Side Us>
     static inline void make_move(Board &board, const int move) {
-        int source_square = get_move_source(move);
-        int target_square = get_move_target(move);
-        int piece = get_move_piece(move);
-        int promoted_piece = get_move_promoted(move);
-        bool capture = get_move_capture(move);
-        bool double_push = get_move_double(move);
-        bool enpass = get_move_enpassant(move);
-        int castling = get_move_castling(move);
+        const int source_square = get_move_source(move);
+        const int target_square = get_move_target(move);
+        const int piece = get_move_piece(move);
+        const int promoted_piece = get_move_promoted(move);
+        const bool capture = get_move_capture(move);
+        const bool double_push = get_move_double(move);
+        const bool enpass = get_move_enpassant(move);
+        const int castling = get_move_castling(move);
 
         pop_bit(board.bitboards[piece], source_square);
         set_bit(board.bitboards[piece], target_square);
 
         board.hash_key ^= Random::piece_keys[piece][source_square];
         board.hash_key ^= Random::piece_keys[piece][target_square];
-        int old = board.piece_at[target_square];
+        const int old = board.piece_at[target_square];
 
         board.piece_at[source_square] = NO_PIECE;
         board.piece_at[target_square] = piece;
@@ -491,7 +473,6 @@ namespace ChessBoard {
                 board.hash_key ^= Random::piece_keys[old][target_square];
             }
         }
-
 
         if (board.enpassant != no_sq) {
             board.hash_key ^= Random::enpassant_key[board.enpassant];
@@ -646,15 +627,15 @@ namespace ChessBoard {
     static inline U64 pin_mask[64];
 
     static constexpr inline Move encode_move(
-        int source,
-        int target,
-        int piece,
-        int promoted,
-        bool capture,
-        bool double_push,
-        bool enpassant,
-        bool castling,
-        bool attacked
+        const int source,
+        const int target,
+        const int piece,
+        const int promoted,
+        const bool capture,
+        const bool double_push,
+        const bool enpassant,
+        const bool castling,
+        const bool attacked
     ) {
         return (source & 0x3f) |
                ((target & 0x3f) << 6) |
@@ -667,51 +648,59 @@ namespace ChessBoard {
                ((attacked ? 1 : 0) << 24);
     }
 
-    // Helper to initialize tables
-    template<Side MovingSide, int PieceType, int PromotedPiece, bool IsCapture, bool IsDoublePush, bool IsEnpassant,
-        bool IsCastle>
-    constexpr std::array<std::array<Move, 64>, 64> InitializeMoveTable() {
+    template<Side MovingSide, int PieceType, int PromotedPiece, bool IsCapture, bool IsDoublePush, bool IsEnpassant, bool IsCastle>
+    static inline constexpr std::array<std::array<Move, 64>, 64> InitializeMoveTable() {
+        constexpr int ActualPiece = []() constexpr {
+            switch (PieceType) {
+                case K:
+                case k: return MovingSide == Side::WHITE ? K : k;
+                case Q:
+                case q: return MovingSide == Side::WHITE ? Q : q;
+                case R:
+                case r: return MovingSide == Side::WHITE ? R : r;
+                case B:
+                case b: return MovingSide == Side::WHITE ? B : b;
+                case N:
+                case n: return MovingSide == Side::WHITE ? N : n;
+                default: return MovingSide == Side::WHITE ? P : p;
+            }
+        }();
+
+        constexpr int ActualPromotedPiece = []() constexpr {
+            switch (PromotedPiece) {
+                case Q:
+                case q: return MovingSide == Side::WHITE ? Q : q;
+                case R:
+                case r: return MovingSide == Side::WHITE ? R : r;
+                case B:
+                case b: return MovingSide == Side::WHITE ? B : b;
+                case N:
+                case n: return MovingSide == Side::WHITE ? N : n;
+                default: return NO_PIECE;
+            }
+        }();
+
         std::array<std::array<Move, 64>, 64> table{};
-        constexpr int ActualPiece = (PieceType == K || PieceType == k)
-                                        ? ((MovingSide == Side::WHITE) ? K : k)
-                                        : (PieceType == Q || PieceType == q)
-                                              ? ((MovingSide == Side::WHITE) ? Q : q)
-                                              : (PieceType == R || PieceType == r)
-                                                    ? ((MovingSide == Side::WHITE) ? R : r)
-                                                    : (PieceType == B || PieceType == b)
-                                                          ? ((MovingSide == Side::WHITE) ? B : b)
-                                                          : (PieceType == N || PieceType == n)
-                                                                ? ((MovingSide == Side::WHITE) ? N : n)
-                                                                :
-                                                                /* Pawn */ ((MovingSide == Side::WHITE) ? P : p);
-
-        constexpr int ActualPromotedPiece = (PromotedPiece == NO_PIECE)
-                                                ? NO_PIECE
-                                                : // No promotion
-                                                (PromotedPiece == Q || PromotedPiece == q)
-                                                    ? ((MovingSide == Side::WHITE) ? Q : q)
-                                                    : (PromotedPiece == R || PromotedPiece == r)
-                                                          ? ((MovingSide == Side::WHITE) ? R : r)
-                                                          : (PromotedPiece == B || PromotedPiece == b)
-                                                                ? ((MovingSide == Side::WHITE) ? B : b)
-                                                                :
-                                                                /* Knight */ ((MovingSide == Side::WHITE) ? N : n);
-
-
-        for (int source = 0; source < 64; ++source) {
-            for (int target = 0; target < 64; ++target) {
-                // Note: is_check is always false during generation here
-                table[source][target] = encode_move(source, target, ActualPiece, ActualPromotedPiece,
-                                                    IsCapture, IsDoublePush, IsEnpassant, IsCastle, false);
+        for (int src = 0; src < 64; ++src) {
+            for (int dst = 0; dst < 64; ++dst) {
+                table[src][dst] = encode_move(
+                    src, dst,
+                    ActualPiece,
+                    ActualPromotedPiece,
+                    IsCapture,
+                    IsDoublePush,
+                    IsEnpassant,
+                    IsCastle,
+                    false
+                );
             }
         }
+
         return table;
     }
 
-
     template<Side Us>
     struct PrecomputedMoves {
-        // Define piece constants for the current side 'Us'
         static constexpr int Pawn = (Us == Side::WHITE) ? P : p;
         static constexpr int Knight = (Us == Side::WHITE) ? N : n;
         static constexpr int Bishop = (Us == Side::WHITE) ? B : b;
@@ -719,33 +708,23 @@ namespace ChessBoard {
         static constexpr int Queen = (Us == Side::WHITE) ? Q : q;
         static constexpr int King = (Us == Side::WHITE) ? K : k;
 
-        // Define promotion piece constants for the current side 'Us'
-        // Using the piece type enum directly might be cleaner if they map correctly
         static constexpr int PromoteQueen = (Us == Side::WHITE) ? Q : q;
         static constexpr int PromoteRook = (Us == Side::WHITE) ? R : r;
         static constexpr int PromoteKnight = (Us == Side::WHITE) ? N : n;
         static constexpr int PromoteBishop = (Us == Side::WHITE) ? B : b;
 
-
-        // Tables indexed by [source_square][target_square]
-
-        // King Moves
         static constexpr auto KingQuiet = InitializeMoveTable<Us, K, NO_PIECE, false, false, false, false>();
         static constexpr auto KingCapture = InitializeMoveTable<Us, K, NO_PIECE, true, false, false, false>();
 
-        // Pawn Captures (Non-Promotion)
         static constexpr auto PawnCapture = InitializeMoveTable<Us, P, NO_PIECE, true, false, false, false>();
 
-        // Pawn Captures (Promotion) - Use the generic piece type (Q/R/B/N) for the PromotedPiece template arg
         static constexpr auto PawnCapturePromoteQueen = InitializeMoveTable<Us, P, Q, true, false, false, false>();
         static constexpr auto PawnCapturePromoteRook = InitializeMoveTable<Us, P, R, true, false, false, false>();
         static constexpr auto PawnCapturePromoteKnight = InitializeMoveTable<Us, P, N, true, false, false, false>();
         static constexpr auto PawnCapturePromoteBishop = InitializeMoveTable<Us, P, B, true, false, false, false>();
 
-        // Pawn Push (Single, Non-Promotion)
         static constexpr auto PawnPush = InitializeMoveTable<Us, P, NO_PIECE, false, false, false, false>();
 
-        // Pawn Push (Single, Promotion)
         static constexpr auto PawnPushPromoteQueen = InitializeMoveTable<Us, P, Q, false, false, false, false>();
         static constexpr auto PawnPushPromoteRook = InitializeMoveTable<Us, P, R, false, false, false, false>();
         static constexpr auto PawnPushPromoteKnight = InitializeMoveTable<Us, P, N, false, false, false, false>();
@@ -779,7 +758,7 @@ namespace ChessBoard {
 
 
     template<Side Us>
-    static inline constexpr void generate_moves_internal(const Board &board, MoveList &move_list) {
+    static inline constexpr void generate_moves(const Board &board, MoveList &move_list) {
         constexpr Side Them = (Us == Side::WHITE) ? Side::BLACK : Side::WHITE;
         const U64 attackedSquares = mask_attacked<Them, true>(board);
         U64 mask_pins = 0ULL;
@@ -794,7 +773,6 @@ namespace ChessBoard {
         constexpr int TheyBishop = Us == Side::WHITE ? b : B;
         constexpr U64 Rank8 = (Us == Side::WHITE) ? 0xFFULL : 0xFFULL << 56;
 
-
         const U64 us_pieces = board.occupancies[static_cast<int>(Us)];
         const U64 them_pieces = board.occupancies[static_cast<int>(Them)];
         const U64 occupied = board.occupancies[static_cast<int>(Side::BOTH)];
@@ -808,7 +786,6 @@ namespace ChessBoard {
         constexpr int Queen = (Us == Side::WHITE) ? Q : q;
         constexpr int King = (Us == Side::WHITE) ? K : k;
 
-
         U64 pieces = board.bitboards[King];
         int source_square = get_ls1b_index(pieces);
         int king_square = source_square;
@@ -818,13 +795,13 @@ namespace ChessBoard {
         U64 attacks = king_attacks[source_square] & ~us_pieces & ~attackedSquares;
 
         U64 quiet_attacks = attacks & ~them_pieces;
-        Bitloop(quiet_attacks) {
+        bitloop(quiet_attacks) {
             const int target_square = get_ls1b_index(quiet_attacks);
             move_list.add(PrecomputedMoves<Us>::KingQuiet[source_square][target_square]);
         }
 
         U64 capture_attacks = attacks & them_pieces;
-        Bitloop(capture_attacks) {
+        bitloop(capture_attacks) {
             const int target_square = get_ls1b_index(capture_attacks);
             move_list.add(PrecomputedMoves<Us>::KingCapture[source_square][target_square]);
         }
@@ -834,8 +811,9 @@ namespace ChessBoard {
             return;
         } else if (attackersCount == 1) {
             capture_mask = checkers;
-            if (IsSlider(checkers, king_square) != 0ULL) {
-                push_mask = opponent_slider_rays_to_square(checkers, king_square);
+
+            if ((checkers & ~king_attacks[king_square] & ~knight_attacks[king_square]) != 0ULL) {
+                push_mask = line_between[get_ls1b_index(checkers)][king_square];
             } else {
                 push_mask = 0ULL;
             }
@@ -845,7 +823,7 @@ namespace ChessBoard {
                            board.bitboards[TheyQueen] | board.bitboards[TheyBishop]) &
                        Chess_Lookup::Fancy::GetBishopAttacks(king_square, 0ULL);
 
-        Bitloop(pinboard) {
+        bitloop(pinboard) {
             const int square = get_ls1b_index(pinboard);
             const U64 line = line_between[square][king_square];
 
@@ -859,22 +837,23 @@ namespace ChessBoard {
 
         pieces = board.bitboards[Pawn];
 
-        Bitloop(pieces) {
+        bitloop(pieces) {
             U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
-            const U64 condition = -((mask_pins & (1ULL << source_square)) != 0);
-            full_mask = (pin_mask[source_square] & condition) | (0xFFFFFFFFFFFFFFFFULL & ~condition);
+            if ((mask_pins & (1ULL << source_square)) != 0) {
+                full_mask = pin_mask[source_square];
+            }
 
             attacks = pawn_attacks[static_cast<int>(Us)][source_square] & them_pieces & capture_mask & full_mask;
             capture_attacks = attacks & Rank8;
             quiet_attacks = attacks & ~capture_attacks;
 
-            Bitloop(quiet_attacks) {
+            bitloop(quiet_attacks) {
                 const int target_square = get_ls1b_index(quiet_attacks);
                 move_list.add(PrecomputedMoves<Us>::PawnCapture[source_square][target_square]);
             }
 
-            Bitloop(capture_attacks) {
+            bitloop(capture_attacks) {
                 const int target_square = get_ls1b_index(capture_attacks);
                 move_list.add(PrecomputedMoves<Us>::PawnCapturePromoteQueen[source_square][target_square]);
                 move_list.add(PrecomputedMoves<Us>::PawnCapturePromoteRook[source_square][target_square]);
@@ -885,7 +864,7 @@ namespace ChessBoard {
 
         if (board.enpassant != no_sq) {
             U64 enpassant_attacks = pawn_attacks[static_cast<int>(Them)][board.enpassant] & board.bitboards[Pawn];
-            Bitloop(enpassant_attacks) {
+            bitloop(enpassant_attacks) {
                 source_square = get_ls1b_index(enpassant_attacks);
                 int target_square = board.enpassant;
                 const bool is_pinned = (mask_pins & (1ULL << source_square)) != 0;
@@ -914,7 +893,7 @@ namespace ChessBoard {
             pieces = bPawnsAble2Push(pieces, empty) & ~promote & (push_mask >> 8);
         }
 
-        Bitloop(pieces) {
+        bitloop(pieces) {
             source_square = get_ls1b_index(pieces);
             const int target_square = source_square + PawnDir;
 
@@ -932,7 +911,7 @@ namespace ChessBoard {
             pieces = promote & (push_mask >> 8);
         }
 
-        Bitloop(pieces) {
+        bitloop(pieces) {
             source_square = get_ls1b_index(pieces);
             const int target_square = source_square + PawnDir;
 
@@ -959,7 +938,7 @@ namespace ChessBoard {
             pieces = bPawnsAble2DblPush(pieces, empty) & (push_mask >> 16);
         }
 
-        Bitloop(pieces) {
+        bitloop(pieces) {
             source_square = get_ls1b_index(pieces);
             const int target_square = source_square + PawnDirDouble;
             U64 masked = (mask_pins >> source_square) & 1;
@@ -971,7 +950,7 @@ namespace ChessBoard {
         }
 
         pieces = board.bitboards[Knight];
-        Bitloop(pieces) {
+        bitloop(pieces) {
             U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
             if ((mask_pins & (1ULL << source_square)) != 0) {
@@ -980,13 +959,13 @@ namespace ChessBoard {
             attacks = knight_attacks[source_square] & ~us_pieces & full_mask;
 
             quiet_attacks = attacks & ~them_pieces & push_mask;
-            Bitloop(quiet_attacks) {
+            bitloop(quiet_attacks) {
                 int target_square = get_ls1b_index(quiet_attacks);
                 move_list.add(PrecomputedMoves<Us>::KnightQuiet[source_square][target_square]);
             }
 
             capture_attacks = attacks & them_pieces & capture_mask;
-            Bitloop(capture_attacks) {
+            bitloop(capture_attacks) {
                 int target_square = get_ls1b_index(capture_attacks);
                 move_list.add(PrecomputedMoves<Us>::KnightCapture[source_square][target_square]);
             }
@@ -994,7 +973,7 @@ namespace ChessBoard {
 
 
         pieces = board.bitboards[Bishop];
-        Bitloop(pieces) {
+        bitloop(pieces) {
             U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
             if ((mask_pins & (1ULL << source_square)) != 0) {
@@ -1003,20 +982,20 @@ namespace ChessBoard {
             attacks = Chess_Lookup::Fancy::GetBishopAttacks(source_square, occupied) & ~us_pieces & full_mask;
 
             quiet_attacks = attacks & ~them_pieces & push_mask;
-            Bitloop(quiet_attacks) {
+            bitloop(quiet_attacks) {
                 int target_square = get_ls1b_index(quiet_attacks);
                 move_list.add(PrecomputedMoves<Us>::BishopQuiet[source_square][target_square]);
             }
 
             capture_attacks = attacks & them_pieces & capture_mask;
-            Bitloop(capture_attacks) {
+            bitloop(capture_attacks) {
                 int target_square = get_ls1b_index(capture_attacks);
                 move_list.add(PrecomputedMoves<Us>::BishopCapture[source_square][target_square]);
             }
         }
 
         pieces = board.bitboards[Rook];
-        Bitloop(pieces) {
+        bitloop(pieces) {
             U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
             if ((mask_pins & (1ULL << source_square)) != 0) {
@@ -1025,20 +1004,20 @@ namespace ChessBoard {
             attacks = Chess_Lookup::Fancy::GetRookAttacks(source_square, occupied) & ~us_pieces & full_mask;
 
             quiet_attacks = attacks & ~them_pieces & push_mask;
-            Bitloop(quiet_attacks) {
+            bitloop(quiet_attacks) {
                 int target_square = get_ls1b_index(quiet_attacks);
                 move_list.add(PrecomputedMoves<Us>::RookQuiet[source_square][target_square]);
             }
 
             capture_attacks = attacks & them_pieces & capture_mask;
-            Bitloop(capture_attacks) {
+            bitloop(capture_attacks) {
                 int target_square = get_ls1b_index(capture_attacks);
                 move_list.add(PrecomputedMoves<Us>::RookCapture[source_square][target_square]);
             }
         }
 
         pieces = board.bitboards[Queen];
-        Bitloop(pieces) {
+        bitloop(pieces) {
             U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
             if ((mask_pins & (1ULL << source_square)) != 0) {
@@ -1047,13 +1026,13 @@ namespace ChessBoard {
             attacks = Chess_Lookup::Fancy::Queen(source_square, occupied) & ~us_pieces & full_mask;
 
             quiet_attacks = attacks & ~them_pieces & push_mask;
-            Bitloop(quiet_attacks) {
+            bitloop(quiet_attacks) {
                 int target_square = get_ls1b_index(quiet_attacks);
                 move_list.add(PrecomputedMoves<Us>::QueenQuiet[source_square][target_square]);
             }
 
             capture_attacks = attacks & them_pieces & capture_mask;
-            Bitloop(capture_attacks) {
+            bitloop(capture_attacks) {
                 int target_square = get_ls1b_index(capture_attacks);
                 move_list.add(PrecomputedMoves<Us>::QueenCapture[source_square][target_square]);
             }
@@ -1103,9 +1082,9 @@ namespace ChessBoard {
         move_list.count = 0;
 
         if (board.side_to_move == Side::WHITE) {
-            generate_moves_internal<Side::WHITE>(board, move_list);
+            generate_moves<Side::WHITE>(board, move_list);
         } else {
-            generate_moves_internal<Side::BLACK>(board, move_list);
+            generate_moves<Side::BLACK>(board, move_list);
         }
 
         for (int i = 0; i < move_list.count; i++) {

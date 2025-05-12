@@ -1,7 +1,6 @@
 #pragma once
 #include <cstdint>
 #include <cstring>
-#include <cstdlib>
 #include <array>
 #include <iostream>
 #include "Board.hpp"
@@ -20,7 +19,7 @@ namespace Perft {
         71179139ULL, 28859283ULL, 7618365ULL, 28181ULL, 6323457ULL
     };
 
-    static inline const char *fens[] = {
+    static inline const std::string fens[] = {
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
         "2b1b3/1r1P4/3K3p/1p6/2p5/6k1/1P3p2/4B3 w - - 0 42",
         "8/2p5/3p4/KP5r/1R3p1k/8/4P1P1/8 w - -",
@@ -57,9 +56,9 @@ namespace Perft {
         ChessBoard::MoveList move_list;
         move_list.count = 0;
         if (board.side_to_move == ChessBoard::Side::WHITE) {
-            ChessBoard::generate_moves_internal<ChessBoard::Side::WHITE>(board, move_list);
+            ChessBoard::generate_moves<ChessBoard::Side::WHITE>(board, move_list);
         } else {
-            ChessBoard::generate_moves_internal<ChessBoard::Side::BLACK>(board, move_list);
+            ChessBoard::generate_moves<ChessBoard::Side::BLACK>(board, move_list);
         }
 
         unsigned long long total_nodes = 0;
@@ -89,10 +88,10 @@ namespace Perft {
         int total = 0;
         double totalTime = 0;
 
-        for (int i = 0; i < std::size(fens); i++) {
+        for (size_t i = 0; i < std::size(fens); i++) {
             total++;
             ChessBoard::Board board;
-            parse_fen(fens[i], board);
+            parse_fen(fens[i].c_str(), board);
 
             const clock_t start = clock();
             const unsigned long long nodes = perft(board, depths[i]);
@@ -101,7 +100,7 @@ namespace Perft {
             const double time_taken = static_cast<double>(end - start) / CLOCKS_PER_SEC;
             totalTime += time_taken;
             char message[256];
-            sprintf(message, "Position %d (depth %d): %llu nodes in %.3f sec (%.0f NPS)",
+            sprintf(message, "Position %llu (depth %d): %llu nodes in %.3f sec (%.0f NPS)",
                     i, depths[i], nodes, time_taken, nodes / (time_taken + 0.001));
 
             if (nodes == expectedNodes[i]) {
