@@ -5,7 +5,7 @@
 #include <cmath>
 #include <iostream>
 #include <unordered_map>
-#include <bits/ranges_algobase.h>
+#include <algorithm>
 #include "Hash_Fancy.hpp"
 #include "Random.hpp"
 
@@ -205,8 +205,6 @@ namespace ChessBoard {
         void add(const Move move) {
             moves[count++] = move;
         }
-        [[nodiscard]] size_t size() const { return count; }
-        void clear() { count = 0; }
     };
 
     struct Board {
@@ -441,6 +439,11 @@ namespace ChessBoard {
 
     template<Side Us>
     static inline void make_move(Board &board, const int move) {
+        constexpr int Pawn = (Us == Side::WHITE) ? P : p;
+        constexpr int ThemPawn = (Us != Side::WHITE) ? P : p;
+        constexpr int Direction = (Us == Side::WHITE) ? 8 : -8;
+        constexpr Side Them = (Us == Side::WHITE) ? Side::BLACK : Side::WHITE;
+
         const int source_square = get_move_source(move);
         const int target_square = get_move_target(move);
         const int piece = get_move_piece(move);
@@ -460,7 +463,6 @@ namespace ChessBoard {
         board.piece_at[source_square] = NO_PIECE;
         board.piece_at[target_square] = piece;
 
-
         if (capture) {
             if (get_bit(board.bitboards[old], target_square)) {
                 pop_bit(board.bitboards[old], target_square);
@@ -474,37 +476,19 @@ namespace ChessBoard {
 
         board.enpassant = no_sq;
         if (promoted_piece != NO_PIECE) {
-            if constexpr (Us == Side::WHITE) {
-                pop_bit(board.bitboards[P], target_square);
-
-                board.hash_key ^= Random::piece_keys[P][target_square];
-            } else {
-                pop_bit(board.bitboards[p], target_square);
-
-                board.hash_key ^= Random::piece_keys[p][target_square];
-            }
+            pop_bit(board.bitboards[Pawn], target_square);
+            board.hash_key ^= Random::piece_keys[Pawn][target_square];
 
             set_bit(board.bitboards[promoted_piece], target_square);
             board.hash_key ^= Random::piece_keys[promoted_piece][target_square];
             board.piece_at[target_square] = promoted_piece;
         } else if (enpass) {
-            if constexpr (Us == Side::WHITE) {
-                pop_bit(board.bitboards[p], target_square + 8);
-                board.piece_at[target_square + 8] = -1;
-                board.hash_key ^= Random::piece_keys[p][target_square + 8];
-            } else {
-                pop_bit(board.bitboards[P], target_square - 8);
-                board.piece_at[target_square - 8] = -1;
-                board.hash_key ^= Random::piece_keys[P][target_square - 8];
-            }
+            pop_bit(board.bitboards[ThemPawn], target_square + Direction);
+            board.piece_at[target_square + Direction] = NO_PIECE;
+            board.hash_key ^= Random::piece_keys[ThemPawn][target_square + Direction];
         } else if (double_push) {
-            if constexpr (Us == Side::WHITE) {
-                board.enpassant = target_square + 8;
-                board.hash_key ^= Random::enpassant_key[target_square + 8];
-            } else {
-                board.enpassant = target_square - 8;
-                board.hash_key ^= Random::enpassant_key[target_square - 8];
-            }
+            board.enpassant = target_square + Direction;
+            board.hash_key ^= Random::enpassant_key[target_square + Direction];
         } else if (castling) {
             if constexpr (Us == Side::WHITE) {
                 if (target_square == g1) {
@@ -547,6 +531,7 @@ namespace ChessBoard {
         board.castling_rights &= castling_rights[target_square];
 
         board.hash_key ^= Random::castle_key[board.castling_rights];
+        board.hash_key ^= Random::side_key;
 
         board.occupancies[0] =
                 board.bitboards[0] | board.bitboards[1] | board.bitboards[2] |
@@ -559,13 +544,7 @@ namespace ChessBoard {
 
         board.occupancies[2] = board.occupancies[0] | board.occupancies[1];
 
-        board.hash_key ^= Random::side_key;
-
-        if constexpr (Us == Side::WHITE) {
-            board.side_to_move = Side::BLACK;
-        } else {
-            board.side_to_move = Side::WHITE;
-        }
+        board.side_to_move = Them;
     }
 
     template<Side Us>
@@ -757,7 +736,7 @@ namespace ChessBoard {
 
 
     template<Side Us>
-    static constexpr inline void generate_moves(const Board &board, MoveList &move_list) {
+    static constexpr inline void generate_moves(const Board& board, MoveList &move_list) {
         constexpr Side Them = (Us == Side::WHITE) ? Side::BLACK : Side::WHITE;
         const U64 attackedSquares = mask_attacked<Them, true>(board);
         U64 mask_pins = 0ULL;
@@ -866,10 +845,9 @@ namespace ChessBoard {
             bitloop(enpassant_attacks) {
                 source_square = get_ls1b_index(enpassant_attacks);
                 int target_square = board.enpassant;
-                const bool is_pinned = (mask_pins & (1ULL << source_square)) != 0;
-                if (is_pinned) {
-                    int captured_pawn_sq = target_square + ((Us == Side::WHITE) ? +8 : -8);
-                    U64 move_and_capture_squares = (1ULL << target_square) | (1ULL << captured_pawn_sq);
+                if ((mask_pins & (1ULL << source_square)) != 0) {
+                    int captured_pawn_sq = target_square + PawnDir;
+                    const U64 move_and_capture_squares = (1ULL << target_square) | (1ULL << captured_pawn_sq);
                     if ((pin_mask[source_square] & move_and_capture_squares) == 0) {
                         continue;
                     }
