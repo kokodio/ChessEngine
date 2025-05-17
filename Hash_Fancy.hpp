@@ -841,19 +841,17 @@ namespace Chess_Lookup::Fancy {
         { lookup_table + 1009, 9331317138511593471ull, 562962977269890ull },
     };
 
-    constexpr auto Size = sizeof(lookup_table) + sizeof(b_magics) + sizeof(r_magics);
-
-    static constexpr uint64_t GetRookAttacks(int s, uint64_t occ) {
-        FancyHash m = r_magics[s];
+    static constexpr inline uint64_t GetRookAttacks(const int s, const uint64_t occ) {
+        const FancyHash m = r_magics[s];
         return m.attacks[((occ | m.mask) * m.hash) >> (64 - 12)];
     }
 
-    static constexpr uint64_t GetBishopAttacks(int s, uint64_t occ) {
-        FancyHash m = b_magics[s];
+    static constexpr inline uint64_t GetBishopAttacks(const int s,const uint64_t occ) {
+        const FancyHash m = b_magics[s];
         return m.attacks[((occ | m.mask) * m.hash) >> (64 - 9)];
     }
 
-    static constexpr uint64_t Queen(int s, uint64_t occ) {
+    static constexpr inline uint64_t Queen(const int s, const uint64_t occ) {
         return GetRookAttacks(s, occ) | GetBishopAttacks(s, occ);
     }
 }

@@ -35,6 +35,8 @@ namespace ChessBoard {
         13, 15, 15, 15, 12, 15, 15, 14
     };
 
+    static_assert(castling_rights[0] == 7);
+
     enum class Castling : int { wk = 1, wq = 2, bk = 4, bq = 8 };
 
     enum {
@@ -131,7 +133,7 @@ namespace ChessBoard {
         return attacks;
     }
 
-    static constexpr std::array<U64, 64> generate_knight_attacks_table() {
+    static consteval std::array<U64, 64> generate_knight_attacks_table() {
         std::array<U64, 64> table{};
         for (int sq = 0; sq < 64; ++sq) {
             table[sq] = mask_knight_attacks(sq);
@@ -139,7 +141,7 @@ namespace ChessBoard {
         return table;
     }
 
-    static constexpr std::array<U64, 64> generate_king_attacks_table() {
+    static consteval std::array<U64, 64> generate_king_attacks_table() {
         std::array<U64, 64> table{};
         for (int sq = 0; sq < 64; ++sq) {
             table[sq] = mask_king_attacks(sq);
@@ -147,7 +149,7 @@ namespace ChessBoard {
         return table;
     }
 
-    static constexpr std::array<std::array<U64, 64>, 2> generate_pawn_attacks_table() {
+    static consteval std::array<std::array<U64, 64>, 2> generate_pawn_attacks_table() {
         std::array<std::array<U64, 64>, 2> table{};
         for (int sq = 0; sq < 64; ++sq) {
             table[static_cast<int>(Side::WHITE)][sq] = mask_pawn_attacks(Side::WHITE, sq);
@@ -159,6 +161,10 @@ namespace ChessBoard {
     static constexpr auto knight_attacks = generate_knight_attacks_table();
     static constexpr auto king_attacks = generate_king_attacks_table();
     static constexpr auto pawn_attacks = generate_pawn_attacks_table();
+
+    static_assert(knight_attacks[1] == 329728);
+    static_assert(king_attacks[1] == 1797);
+    static_assert(pawn_attacks[1][a2] == 144115188075855872);
 
     [[maybe_unused]] static void print_bitboard(const U64 bitboard) {
         printf("\n");
@@ -193,24 +199,20 @@ namespace ChessBoard {
 
     struct MoveList {
         static constexpr size_t MAX_MOVES = 256;
-        std::array<Move, MAX_MOVES> moves{};
+        Move moves[MAX_MOVES];
         int count = 0;
 
         void add(const Move move) {
             moves[count++] = move;
         }
-
-        Move *end() { return moves.data() + count; }
-        [[nodiscard]] const Move *begin() const { return moves.data(); }
-        [[nodiscard]] const Move *end() const { return moves.data() + count; }
         [[nodiscard]] size_t size() const { return count; }
         void clear() { count = 0; }
     };
 
     struct Board {
-        std::array<U64, 12> bitboards{};
-        std::array<U64, 3> occupancies{};
-        std::array<int8_t, 64> piece_at{};
+        U64 bitboards[12];
+        U64 occupancies[3];
+        int8_t piece_at[64];
         Side side_to_move = Side::WHITE;
         int enpassant = no_sq;
         int castling_rights = 0;
@@ -232,16 +234,7 @@ namespace ChessBoard {
         {'k', k}
     };
 
-    static std::unordered_map<int, char> promoted_pieces = {
-        {Q, 'q'},
-        {R, 'r'},
-        {B, 'b'},
-        {N, 'n'},
-        {q, 'q'},
-        {r, 'r'},
-        {b, 'b'},
-        {n, 'n'}
-    };
+    static constexpr std::string promoted_pieces = "qrbnqrbn";
 
     [[maybe_unused]] static inline U64 generate_hash_key(const Board &board) {
         U64 key = 0ULL;
@@ -356,11 +349,11 @@ namespace ChessBoard {
         board.hash_key = generate_hash_key(board);
     }
 
-    static constexpr int sign(const int x) {
+    static consteval int sign(const int x) {
         return (x > 0) - (x < 0);
     }
 
-    static constexpr std::array<std::array<U64, 64>, 64> generate_line_between() {
+    static consteval std::array<std::array<U64, 64>, 64> generate_line_between() {
         std::array<std::array<U64, 64>, 64> table{};
         for (int s = 0; s < 64; s++) {
             for (int t = 0; t < 64; t++) {
@@ -392,9 +385,10 @@ namespace ChessBoard {
     }
 
     static constexpr auto line_between = generate_line_between();
+    static_assert(line_between[a1][a8] == 282578800148736);
 
     template<Side Us, bool excludeKing>
-    static  inline U64 mask_attacked(const Board &board) {
+    static inline U64 mask_attacked(const Board &board) {
         //constexpr Side Them = (Us == Side::WHITE) ? Side::BLACK : Side::WHITE;
         constexpr int Pawn = (Us == Side::WHITE) ? P : p;
         constexpr int Knight = (Us == Side::WHITE) ? N : n;
@@ -626,7 +620,7 @@ namespace ChessBoard {
 
     static inline U64 pin_mask[64];
 
-    static constexpr inline Move encode_move(
+    static consteval Move encode_move(
         const int source,
         const int target,
         const int piece,
@@ -649,8 +643,8 @@ namespace ChessBoard {
     }
 
     template<Side MovingSide, int PieceType, int PromotedPiece, bool IsCapture, bool IsDoublePush, bool IsEnpassant, bool IsCastle>
-    static inline constexpr std::array<std::array<Move, 64>, 64> InitializeMoveTable() {
-        constexpr int ActualPiece = []() constexpr {
+    static inline consteval std::array<std::array<Move, 64>, 64> InitializeMoveTable() {
+        constexpr int ActualPiece = []() consteval {
             switch (PieceType) {
                 case K:
                 case k: return MovingSide == Side::WHITE ? K : k;
@@ -666,7 +660,7 @@ namespace ChessBoard {
             }
         }();
 
-        constexpr int ActualPromotedPiece = []() constexpr {
+        constexpr int ActualPromotedPiece = []() consteval {
             switch (PromotedPiece) {
                 case Q:
                 case q: return MovingSide == Side::WHITE ? Q : q;
@@ -754,11 +748,16 @@ namespace ChessBoard {
             (Us == Side::WHITE) ? e1 : e8,
             (Us == Side::WHITE) ? c1 : c8,
             King, NO_PIECE, false, false, false, true, false);
+
+        static_assert(KingQuiet[0][0] != 0, "Compile‐time init failed");
+        static_assert(KingCapture[0][0] != 0, "Compile‐time init failed");
+        static_assert(PawnCapture[0][0] != 0, "Compile‐time init failed");
+        static_assert(PawnPush[0][0] != 0, "Compile‐time init failed");
     };
 
 
     template<Side Us>
-    static inline constexpr void generate_moves(const Board &board, MoveList &move_list) {
+    static constexpr inline void generate_moves(const Board &board, MoveList &move_list) {
         constexpr Side Them = (Us == Side::WHITE) ? Side::BLACK : Side::WHITE;
         const U64 attackedSquares = mask_attacked<Them, true>(board);
         U64 mask_pins = 0ULL;
@@ -1070,7 +1069,6 @@ namespace ChessBoard {
     }
 
     static inline int test_ply;
-    static inline MoveList moves[128];
 
     static inline unsigned long long perft(const Board &board, const int depth) {
         if (depth == 0) {
@@ -1078,7 +1076,7 @@ namespace ChessBoard {
         }
 
         unsigned long long nodes = 0;
-        MoveList &move_list = moves[depth];
+        MoveList move_list;
         move_list.count = 0;
 
         if (board.side_to_move == Side::WHITE) {

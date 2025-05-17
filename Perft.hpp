@@ -52,7 +52,7 @@ namespace Perft {
         "8/1p4p1/8/q1PK1P1r/3p1k2/8/4P3/4Q3 b - - 0 1"
     };
 
-    void divide(ChessBoard::Board &board, int depth) {
+    void divide(const ChessBoard::Board &board, int depth) {
         ChessBoard::MoveList move_list;
         move_list.count = 0;
         if (board.side_to_move == ChessBoard::Side::WHITE) {
