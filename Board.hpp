@@ -58,6 +58,8 @@ namespace ChessBoard {
 #define soutOne(b) ((b) << 8)
 #define nortOne(b) ((b) >> 8)
 
+    static inline constexpr U64 BB(const int sq) { return 1ULL << sq; }
+
 
     static inline constexpr U64 wPawnsAble2DblPush(U64 wpawns, U64 empty) {
         return wPawnsAble2Push(wpawns, soutOne(empty & 0x000000FF00000000) & empty);
@@ -84,7 +86,7 @@ namespace ChessBoard {
         (bitboard) &= ~(1ULL << (square));
     }
 
-    static constexpr U64 mask_pawn_attacks(const Side side, const int square) {
+    static consteval U64 mask_pawn_attacks(const Side side, const int square) {
         U64 attacks = 0ULL;
         U64 bitboard = 0ULL;
         set_bit(bitboard, square);
@@ -99,7 +101,7 @@ namespace ChessBoard {
         return attacks;
     }
 
-    static constexpr U64 mask_knight_attacks(const int square) {
+    static consteval U64 mask_knight_attacks(const int square) {
         U64 attacks = 0ULL;
         U64 bitboard = 1ULL << square;
         set_bit(bitboard, square);
@@ -116,7 +118,7 @@ namespace ChessBoard {
         return attacks;
     }
 
-    static constexpr U64 mask_king_attacks(const int square) {
+    static consteval U64 mask_king_attacks(const int square) {
         U64 attacks = 0ULL;
         U64 bitboard = 0ULL;
         set_bit(bitboard, square);
@@ -241,18 +243,18 @@ namespace ChessBoard {
             while (bitboard) {
                 const int square = get_ls1b_index(bitboard);
                 pop_bit(bitboard, square);
-                key ^= Random::piece_keys[piece][square];
+                key ^= Random::keys.piece_keys[piece][square];
             }
         }
 
         if (board.enpassant != no_sq) {
-            key ^= Random::enpassant_key[board.enpassant];
+            key ^= Random::keys.enpassant_key[board.enpassant];
         }
 
-        key ^= Random::castle_key[board.castling_rights];
+        key ^= Random::keys.castle_key[board.castling_rights];
 
         if (board.side_to_move == Side::BLACK) {
-            key ^= Random::side_key;
+            key ^= Random::keys.side_key;
         }
 
         return key;
@@ -372,7 +374,7 @@ namespace ChessBoard {
                     int curFile = fileS + stepFile;
                     while ((curRank != rankT) || (curFile != fileT)) {
                         int curSq = curRank * 8 + curFile;
-                        table[s][t] |= (1ULL << curSq);
+                        table[s][t] |= BB(curSq);
                         curRank += stepRank;
                         curFile += stepFile;
                     }
@@ -443,6 +445,8 @@ namespace ChessBoard {
         constexpr int ThemPawn = (Us != Side::WHITE) ? P : p;
         constexpr int Direction = (Us == Side::WHITE) ? 8 : -8;
         constexpr Side Them = (Us == Side::WHITE) ? Side::BLACK : Side::WHITE;
+        constexpr int UsIndex = (Us == Side::WHITE) ? 0 : 1;
+        constexpr int ThemIndex = (Us == Side::WHITE) ? 1 : 0;
 
         const int source_square = get_move_source(move);
         const int target_square = get_move_target(move);
@@ -453,42 +457,50 @@ namespace ChessBoard {
         const bool enpass = get_move_enpassant(move);
         const int castling = get_move_castling(move);
 
-        pop_bit(board.bitboards[piece], source_square);
-        set_bit(board.bitboards[piece], target_square);
-
-        board.hash_key ^= Random::piece_keys[piece][source_square];
-        board.hash_key ^= Random::piece_keys[piece][target_square];
         const int old = board.piece_at[target_square];
 
+        pop_bit(board.bitboards[piece], source_square);
+        board.hash_key ^= Random::keys.piece_keys[piece][source_square];
+
+        pop_bit(board.occupancies[UsIndex], source_square);
+
         board.piece_at[source_square] = NO_PIECE;
-        board.piece_at[target_square] = piece;
 
         if (capture) {
             if (get_bit(board.bitboards[old], target_square)) {
                 pop_bit(board.bitboards[old], target_square);
-                board.hash_key ^= Random::piece_keys[old][target_square];
+                board.hash_key ^= Random::keys.piece_keys[old][target_square];
+
+                pop_bit(board.occupancies[ThemIndex], target_square);
             }
         }
 
-        if (board.enpassant != no_sq) {
-            board.hash_key ^= Random::enpassant_key[board.enpassant];
-        }
+        set_bit(board.bitboards[piece], target_square);
+        board.hash_key ^= Random::keys.piece_keys[piece][target_square];
 
+        set_bit(board.occupancies[UsIndex], target_square);
+
+        board.piece_at[target_square] = piece;
+
+        if (board.enpassant != no_sq) {
+            board.hash_key ^= Random::keys.enpassant_key[board.enpassant];
+        }
         board.enpassant = no_sq;
+
         if (promoted_piece != NO_PIECE) {
             pop_bit(board.bitboards[Pawn], target_square);
-            board.hash_key ^= Random::piece_keys[Pawn][target_square];
-
             set_bit(board.bitboards[promoted_piece], target_square);
-            board.hash_key ^= Random::piece_keys[promoted_piece][target_square];
+            board.hash_key ^= Random::keys.piece_keys[Pawn][target_square];
+            board.hash_key ^= Random::keys.piece_keys[promoted_piece][target_square];
             board.piece_at[target_square] = promoted_piece;
         } else if (enpass) {
             pop_bit(board.bitboards[ThemPawn], target_square + Direction);
+            pop_bit(board.occupancies[ThemIndex], target_square + Direction);
             board.piece_at[target_square + Direction] = NO_PIECE;
-            board.hash_key ^= Random::piece_keys[ThemPawn][target_square + Direction];
+            board.hash_key ^= Random::keys.piece_keys[ThemPawn][target_square + Direction];
         } else if (double_push) {
             board.enpassant = target_square + Direction;
-            board.hash_key ^= Random::enpassant_key[target_square + Direction];
+            board.hash_key ^= Random::keys.enpassant_key[target_square + Direction];
         } else if (castling) {
             if constexpr (Us == Side::WHITE) {
                 if (target_square == g1) {
@@ -496,15 +508,19 @@ namespace ChessBoard {
                     set_bit(board.bitboards[R], f1);
                     board.piece_at[h1] = NO_PIECE;
                     board.piece_at[f1] = R;
-                    board.hash_key ^= Random::piece_keys[R][h1];
-                    board.hash_key ^= Random::piece_keys[R][f1];
+                    board.hash_key ^= Random::keys.piece_keys[R][h1];
+                    board.hash_key ^= Random::keys.piece_keys[R][f1];
+
+                    board.occupancies[UsIndex] ^= (BB(h1) | BB(f1));
                 } else if (target_square == c1) {
                     pop_bit(board.bitboards[R], a1);
                     set_bit(board.bitboards[R], d1);
                     board.piece_at[a1] = NO_PIECE;
                     board.piece_at[d1] = R;
-                    board.hash_key ^= Random::piece_keys[R][a1];
-                    board.hash_key ^= Random::piece_keys[R][d1];
+                    board.hash_key ^= Random::keys.piece_keys[R][a1];
+                    board.hash_key ^= Random::keys.piece_keys[R][d1];
+
+                    board.occupancies[UsIndex] ^= (BB(a1) | BB(d1));
                 }
             } else {
                 if (target_square == g8) {
@@ -512,38 +528,30 @@ namespace ChessBoard {
                     set_bit(board.bitboards[r], f8);
                     board.piece_at[h8] = NO_PIECE;
                     board.piece_at[f8] = r;
-                    board.hash_key ^= Random::piece_keys[r][h8];
-                    board.hash_key ^= Random::piece_keys[r][f8];
+                    board.hash_key ^= Random::keys.piece_keys[r][h8];
+                    board.hash_key ^= Random::keys.piece_keys[r][f8];
+
+                    board.occupancies[UsIndex] ^= (BB(h8) | BB(f8));
                 } else if (target_square == c8) {
                     pop_bit(board.bitboards[r], a8);
                     set_bit(board.bitboards[r], d8);
                     board.piece_at[a8] = NO_PIECE;
                     board.piece_at[d8] = r;
-                    board.hash_key ^= Random::piece_keys[r][a8];
-                    board.hash_key ^= Random::piece_keys[r][d8];
+                    board.hash_key ^= Random::keys.piece_keys[r][a8];
+                    board.hash_key ^= Random::keys.piece_keys[r][d8];
+
+                    board.occupancies[UsIndex] ^= (BB(a8) | BB(d8));
                 }
             }
         }
 
-        board.hash_key ^= Random::castle_key[board.castling_rights];
-
+        board.occupancies[2] = board.occupancies[0] | board.occupancies[1];
+        board.hash_key ^= Random::keys.castle_key[board.castling_rights];
         board.castling_rights &= castling_rights[source_square];
         board.castling_rights &= castling_rights[target_square];
+        board.hash_key ^= Random::keys.castle_key[board.castling_rights];
 
-        board.hash_key ^= Random::castle_key[board.castling_rights];
-        board.hash_key ^= Random::side_key;
-
-        board.occupancies[0] =
-                board.bitboards[0] | board.bitboards[1] | board.bitboards[2] |
-                board.bitboards[3] | board.bitboards[4] | board.bitboards[5];
-
-        board.occupancies[1] =
-                board.bitboards[6] | board.bitboards[7] | board.bitboards[8] |
-                board.bitboards[9] | board.bitboards[10] | board.bitboards[11];
-
-
-        board.occupancies[2] = board.occupancies[0] | board.occupancies[1];
-
+        board.hash_key ^= Random::keys.side_key;
         board.side_to_move = Them;
     }
 
@@ -621,7 +629,8 @@ namespace ChessBoard {
                ((attacked ? 1 : 0) << 24);
     }
 
-    template<Side MovingSide, int PieceType, int PromotedPiece, bool IsCapture, bool IsDoublePush, bool IsEnpassant, bool IsCastle>
+    template<Side MovingSide, int PieceType, int PromotedPiece, bool IsCapture, bool IsDoublePush, bool IsEnpassant,
+        bool IsCastle>
     static inline consteval std::array<std::array<Move, 64>, 64> InitializeMoveTable() {
         constexpr int ActualPiece = []() consteval {
             switch (PieceType) {
@@ -635,7 +644,8 @@ namespace ChessBoard {
                 case b: return MovingSide == Side::WHITE ? B : b;
                 case N:
                 case n: return MovingSide == Side::WHITE ? N : n;
-                default: return MovingSide == Side::WHITE ? P : p;
+                case P:
+                case p: return MovingSide == Side::WHITE ? P : p;
             }
         }();
 
@@ -718,12 +728,12 @@ namespace ChessBoard {
         static constexpr auto QueenQuiet = InitializeMoveTable<Us, Q, NO_PIECE, false, false, false, false>();
         static constexpr auto QueenCapture = InitializeMoveTable<Us, Q, NO_PIECE, true, false, false, false>();
 
-        static constexpr Move CastleKingside = encode_move(
+        static constexpr Move CastleKingSide = encode_move(
             (Us == Side::WHITE) ? e1 : e8,
             (Us == Side::WHITE) ? g1 : g8,
             King, NO_PIECE, false, false, false, true, false);
 
-        static constexpr Move CastleQueenside = encode_move(
+        static constexpr Move CastleQueenSide = encode_move(
             (Us == Side::WHITE) ? e1 : e8,
             (Us == Side::WHITE) ? c1 : c8,
             King, NO_PIECE, false, false, false, true, false);
@@ -734,9 +744,8 @@ namespace ChessBoard {
         static_assert(PawnPush[0][0] != 0, "Compile‐time init failed");
     };
 
-
     template<Side Us>
-    static constexpr inline void generate_moves(const Board& board, MoveList &move_list) {
+    static constexpr inline void generate_moves(const Board &board, MoveList &move_list) {
         constexpr Side Them = (Us == Side::WHITE) ? Side::BLACK : Side::WHITE;
         const U64 attackedSquares = mask_attacked<Them, true>(board);
         U64 mask_pins = 0ULL;
@@ -755,7 +764,6 @@ namespace ChessBoard {
         const U64 them_pieces = board.occupancies[static_cast<int>(Them)];
         const U64 occupied = board.occupancies[static_cast<int>(Side::BOTH)];
         const U64 empty = ~occupied;
-
 
         constexpr int Pawn = (Us == Side::WHITE) ? P : p;
         constexpr int Knight = (Us == Side::WHITE) ? N : n;
@@ -784,7 +792,6 @@ namespace ChessBoard {
             move_list.add(PrecomputedMoves<Us>::KingCapture[source_square][target_square]);
         }
 
-
         if (attackersCount > 1) {
             return;
         } else if (attackersCount == 1) {
@@ -808,7 +815,7 @@ namespace ChessBoard {
             if (const U64 pseudo_pins = line & occupied; count_bits(pseudo_pins) == 1) {
                 if (const U64 pins = pseudo_pins & us_pieces) {
                     mask_pins |= pins;
-                    pin_mask[get_ls1b_index(pins)] = line | (1ULL << square);
+                    pin_mask[get_ls1b_index(pins)] = line | BB(square);
                 }
             }
         }
@@ -818,7 +825,7 @@ namespace ChessBoard {
         bitloop(pieces) {
             U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
-            if ((mask_pins & (1ULL << source_square)) != 0) {
+            if ((mask_pins & BB(source_square)) != 0) {
                 full_mask = pin_mask[source_square];
             }
 
@@ -847,7 +854,7 @@ namespace ChessBoard {
                 int target_square = board.enpassant;
                 if ((mask_pins & (1ULL << source_square)) != 0) {
                     int captured_pawn_sq = target_square + PawnDir;
-                    const U64 move_and_capture_squares = (1ULL << target_square) | (1ULL << captured_pawn_sq);
+                    const U64 move_and_capture_squares = BB(target_square) | BB(captured_pawn_sq);
                     if ((pin_mask[source_square] & move_and_capture_squares) == 0) {
                         continue;
                     }
@@ -930,7 +937,7 @@ namespace ChessBoard {
         bitloop(pieces) {
             U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
-            if ((mask_pins & (1ULL << source_square)) != 0) {
+            if ((mask_pins & BB(source_square)) != 0) {
                 full_mask = pin_mask[source_square];
             }
             attacks = knight_attacks[source_square] & ~us_pieces & full_mask;
@@ -953,7 +960,7 @@ namespace ChessBoard {
         bitloop(pieces) {
             U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
-            if ((mask_pins & (1ULL << source_square)) != 0) {
+            if ((mask_pins & BB(source_square)) != 0) {
                 full_mask = pin_mask[source_square];
             }
             attacks = Chess_Lookup::Fancy::GetBishopAttacks(source_square, occupied) & ~us_pieces & full_mask;
@@ -975,7 +982,7 @@ namespace ChessBoard {
         bitloop(pieces) {
             U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
-            if ((mask_pins & (1ULL << source_square)) != 0) {
+            if ((mask_pins & BB(source_square)) != 0) {
                 full_mask = pin_mask[source_square];
             }
             attacks = Chess_Lookup::Fancy::GetRookAttacks(source_square, occupied) & ~us_pieces & full_mask;
@@ -997,7 +1004,7 @@ namespace ChessBoard {
         bitloop(pieces) {
             U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
-            if ((mask_pins & (1ULL << source_square)) != 0) {
+            if ((mask_pins & BB(source_square)) != 0) {
                 full_mask = pin_mask[source_square];
             }
             attacks = Chess_Lookup::Fancy::Queen(source_square, occupied) & ~us_pieces & full_mask;
@@ -1017,30 +1024,30 @@ namespace ChessBoard {
 
         if constexpr (Us == Side::WHITE) {
             if (board.castling_rights & static_cast<int>(Castling::wk)) {
-                if (!(board.occupancies[2] & (1ull << f1 | 1ull << g1))) {
-                    if (!(attackedSquares & (1ull << e1 | 1ull << f1 | 1ull << g1)))
-                        move_list.add(PrecomputedMoves<Us>::CastleKingside);
+                if (!(board.occupancies[2] & (BB(f1) | BB(g1)))) {
+                    if (!(attackedSquares & (BB(e1) | BB(f1) | BB(g1))))
+                        move_list.add(PrecomputedMoves<Us>::CastleKingSide);
                 }
             }
 
             if (board.castling_rights & static_cast<int>(Castling::wq)) {
-                if (!(board.occupancies[2] & (1ull << d1 | 1ull << c1 | 1ull << b1))) {
-                    if (!(attackedSquares & (1ull << e1 | 1ull << d1 | 1ull << c1)))
-                        move_list.add(PrecomputedMoves<Us>::CastleQueenside);
+                if (!(board.occupancies[2] & (BB(d1) | BB(c1) | BB(b1)))) {
+                    if (!(attackedSquares & (BB(e1) | BB(d1) | BB(c1))))
+                        move_list.add(PrecomputedMoves<Us>::CastleQueenSide);
                 }
             }
         } else {
             if (board.castling_rights & static_cast<int>(Castling::bk)) {
-                if (!(board.occupancies[2] & (1ull << f8 | 1ull << g8))) {
-                    if (!(attackedSquares & (1ull << e8 | 1ull << f8 | 1ull << g8)))
-                        move_list.add(PrecomputedMoves<Us>::CastleKingside);
+                if (!(board.occupancies[2] & (BB(f8) | BB(g8)))) {
+                    if (!(attackedSquares & (BB(e8) | BB(f8) | BB(g8))))
+                        move_list.add(PrecomputedMoves<Us>::CastleKingSide);
                 }
             }
 
             if (board.castling_rights & static_cast<int>(Castling::bq)) {
-                if (!(board.occupancies[2] & (1ull << d8 | 1ull << c8 | 1ull << b8))) {
-                    if (!(attackedSquares & (1ull << e8 | 1ull << d8 | 1ull << c8)))
-                        move_list.add(PrecomputedMoves<Us>::CastleQueenside);
+                if (!(board.occupancies[2] & (BB(d8) | BB(c8) | BB(b8)))) {
+                    if (!(attackedSquares & (BB(e8) | BB(d8) | BB(c8))))
+                        move_list.add(PrecomputedMoves<Us>::CastleQueenSide);
                 }
             }
         }
