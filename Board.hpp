@@ -9,12 +9,22 @@
 #include "Hash_Fancy.hpp"
 #include "Random.hpp"
 
-#define count_bits(bitboard) __builtin_popcountll(bitboard)
-#define get_ls1b_index(bitboard) __builtin_ctzll(bitboard)
 #define bitloop(X) for(; X; X &= X - 1)
+#ifdef _MSC_VER
+#include <intrin.h>
+#define count_bits(bitboard) __popcnt64(bitboard)
+static inline int get_ls1b_index(long long unsigned bb) {
+    unsigned long idx;
+    _BitScanForward64(&idx, bb);
+    return static_cast<int>(idx);
+}
+#else
+#define get_ls1b_index(bitboard) __builtin_ctzll(bitboard)
+#define count_bits(bitboard) __builtin_popcountll(bitboard)
+#endif
 
 namespace ChessBoard {
-    using U64 = uint64_t;
+    using U64 = long long unsigned;
 
     enum class Side : int { WHITE = 0, BLACK = 1, BOTH = 2 };
 

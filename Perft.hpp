@@ -100,7 +100,7 @@ namespace Perft {
             const double time_taken = static_cast<double>(end - start) / CLOCKS_PER_SEC;
             totalTime += time_taken;
             char message[256];
-            sprintf(message, "Position %llu (depth %d): %llu nodes in %.3f sec (%.0f NPS)",
+            sprintf(message, "Position %zu (depth %d): %llu nodes in %.3f sec (%.0f NPS)",
                     i, depths[i], nodes, time_taken, nodes / (time_taken + 0.001));
 
             if (nodes == expectedNodes[i]) {
