@@ -708,6 +708,17 @@ namespace ChessBoard {
 
         static constexpr auto KingQuiet = InitializeMoveTable<Us, K, NO_PIECE, false, false, false, false>();
         static constexpr auto KingCapture = InitializeMoveTable<Us, K, NO_PIECE, true, false, false, false>();
+        static constexpr auto KingAll = []() consteval {
+            std::array<std::array<std::array<Move, 2>, 64>, 64> tbl{};
+
+            for(int src = 0; src < 64; ++src){
+                for(int dst = 0; dst < 64; ++dst){
+                    tbl[src][dst][0] = KingQuiet[src][dst];
+                    tbl[src][dst][1] = KingCapture[src][dst];
+                }
+            }
+            return tbl;
+        }();
 
         static constexpr auto PawnCapture = InitializeMoveTable<Us, P, NO_PIECE, true, false, false, false>();
 
@@ -754,8 +765,10 @@ namespace ChessBoard {
         static_assert(PawnPush[0][0] != 0, "Compile‐time init failed");
     };
 
+    inline Board enpassant_board;
+
     template<Side Us>
-    static constexpr inline void generate_moves(const Board &board, MoveList &move_list) {
+    static constexpr void generate_moves(const Board &board, MoveList &move_list) {
         constexpr Side Them = (Us == Side::WHITE) ? Side::BLACK : Side::WHITE;
         const U64 attackedSquares = mask_attacked<Them, true>(board);
         U64 mask_pins = 0ULL;
@@ -790,16 +803,13 @@ namespace ChessBoard {
 
         U64 attacks = king_attacks[source_square] & ~us_pieces & ~attackedSquares;
 
-        U64 quiet_attacks = attacks & ~them_pieces;
-        bitloop(quiet_attacks) {
-            const int target_square = get_ls1b_index(quiet_attacks);
-            move_list.add(PrecomputedMoves<Us>::KingQuiet[source_square][target_square]);
-        }
+        U64 quiet_attacks;
 
-        U64 capture_attacks = attacks & them_pieces;
+        U64 capture_attacks = attacks;
         bitloop(capture_attacks) {
             const int target_square = get_ls1b_index(capture_attacks);
-            move_list.add(PrecomputedMoves<Us>::KingCapture[source_square][target_square]);
+            bool is_capture = get_bit(them_pieces, target_square);
+            move_list.add(PrecomputedMoves<Us>::KingAll[source_square][target_square][is_capture]);
         }
 
         if (attackersCount > 1) {
@@ -833,11 +843,10 @@ namespace ChessBoard {
         pieces = board.bitboards[Pawn];
 
         bitloop(pieces) {
-            U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
-            if ((mask_pins & BB(source_square)) != 0) {
-                full_mask = pin_mask[source_square];
-            }
+            U64 pinned_bit   = mask_pins & BB(source_square);
+            U64 mask_pinned  = -(pinned_bit >> source_square);
+            U64 full_mask    = (pin_mask[source_square] & mask_pinned) | (~mask_pinned);
 
             attacks = pawn_attacks[static_cast<int>(Us)][source_square] & them_pieces & capture_mask & full_mask;
             capture_attacks = attacks & Rank8;
@@ -862,7 +871,7 @@ namespace ChessBoard {
             bitloop(enpassant_attacks) {
                 source_square = get_ls1b_index(enpassant_attacks);
                 int target_square = board.enpassant;
-                if ((mask_pins & (1ULL << source_square)) != 0) {
+                if ((mask_pins & BB(source_square)) != 0) {
                     int captured_pawn_sq = target_square + PawnDir;
                     const U64 move_and_capture_squares = BB(target_square) | BB(captured_pawn_sq);
                     if ((pin_mask[source_square] & move_and_capture_squares) == 0) {
@@ -870,7 +879,7 @@ namespace ChessBoard {
                     }
                 }
                 int move = PrecomputedMoves<Us>::Enpassant[source_square][target_square];
-                Board enpassant_board = board;
+                memcpy(&enpassant_board, &board, sizeof(Board));
                 make_move<Us>(enpassant_board, move);
                 if (!is_square_attacked<Them>(enpassant_board, king_square)) {
                     move_list.add(move);
@@ -891,9 +900,9 @@ namespace ChessBoard {
             source_square = get_ls1b_index(pieces);
             const int target_square = source_square + PawnDir;
 
-            U64 masked = (mask_pins >> source_square) & 1;
-            U64 valid_if_masked = (pin_mask[source_square] >> target_square) & 1;
-            int valid = static_cast<int>(masked ^ 1 | valid_if_masked);
+            U64 masked = (mask_pins >> source_square);
+            U64 valid_if_masked = (pin_mask[source_square] >> target_square);
+            int valid = static_cast<int>(masked ^ 1 | valid_if_masked) & 1;
 
             move_list.moves[move_list.count] = PrecomputedMoves<Us>::PawnPush[source_square][target_square];
             move_list.count += valid;
@@ -909,9 +918,9 @@ namespace ChessBoard {
             source_square = get_ls1b_index(pieces);
             const int target_square = source_square + PawnDir;
 
-            U64 masked = (mask_pins >> source_square) & 1ull;
-            U64 valid_if_masked = (pin_mask[source_square] >> target_square) & 1ull;
-            int valid = static_cast<int>(masked ^ 1 | valid_if_masked);
+            U64 masked = (mask_pins >> source_square);
+            U64 valid_if_masked = (pin_mask[source_square] >> target_square);
+            int valid = static_cast<int>(masked ^ 1 | valid_if_masked) & 1;
 
             move_list.moves[move_list.count] = PrecomputedMoves<Us>::PawnPushPromoteQueen[source_square][target_square];
             move_list.count += valid;
@@ -935,9 +944,9 @@ namespace ChessBoard {
         bitloop(pieces) {
             source_square = get_ls1b_index(pieces);
             const int target_square = source_square + PawnDirDouble;
-            U64 masked = (mask_pins >> source_square) & 1;
-            U64 valid_if_masked = (pin_mask[source_square] >> target_square) & 1;
-            int valid = static_cast<int>(masked ^ 1 | valid_if_masked);
+            U64 masked = (mask_pins >> source_square);
+            U64 valid_if_masked = (pin_mask[source_square] >> target_square);
+            int valid = static_cast<int>(masked ^ 1 | valid_if_masked) & 1;
 
             move_list.moves[move_list.count] = PrecomputedMoves<Us>::PawnDoublePush[source_square][target_square];
             move_list.count += valid;
@@ -945,11 +954,10 @@ namespace ChessBoard {
 
         pieces = board.bitboards[Knight];
         bitloop(pieces) {
-            U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
-            if ((mask_pins & BB(source_square)) != 0) {
-                full_mask = pin_mask[source_square];
-            }
+            U64 pinned_bit   = mask_pins & BB(source_square);
+            U64 mask_pinned  = -(pinned_bit >> source_square);
+            U64 full_mask    = (pin_mask[source_square] & mask_pinned) | (~mask_pinned);
             attacks = knight_attacks[source_square] & ~us_pieces & full_mask;
 
             quiet_attacks = attacks & ~them_pieces & push_mask;
@@ -968,11 +976,10 @@ namespace ChessBoard {
 
         pieces = board.bitboards[Bishop];
         bitloop(pieces) {
-            U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
-            if ((mask_pins & BB(source_square)) != 0) {
-                full_mask = pin_mask[source_square];
-            }
+            U64 pinned_bit   = mask_pins & BB(source_square);
+            U64 mask_pinned  = -(pinned_bit >> source_square);
+            U64 full_mask    = (pin_mask[source_square] & mask_pinned) | (~mask_pinned);
             attacks = Chess_Lookup::Fancy::GetBishopAttacks(source_square, occupied) & ~us_pieces & full_mask;
 
             quiet_attacks = attacks & ~them_pieces & push_mask;
@@ -990,11 +997,10 @@ namespace ChessBoard {
 
         pieces = board.bitboards[Rook];
         bitloop(pieces) {
-            U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
-            if ((mask_pins & BB(source_square)) != 0) {
-                full_mask = pin_mask[source_square];
-            }
+            U64 pinned_bit   = mask_pins & BB(source_square);
+            U64 mask_pinned  = -(pinned_bit >> source_square);
+            U64 full_mask    = (pin_mask[source_square] & mask_pinned) | (~mask_pinned);
             attacks = Chess_Lookup::Fancy::GetRookAttacks(source_square, occupied) & ~us_pieces & full_mask;
 
             quiet_attacks = attacks & ~them_pieces & push_mask;
@@ -1012,11 +1018,10 @@ namespace ChessBoard {
 
         pieces = board.bitboards[Queen];
         bitloop(pieces) {
-            U64 full_mask = 0xFFFFFFFFFFFFFFFFULL;
             source_square = get_ls1b_index(pieces);
-            if ((mask_pins & BB(source_square)) != 0) {
-                full_mask = pin_mask[source_square];
-            }
+            U64 pinned_bit   = mask_pins & BB(source_square);
+            U64 mask_pinned  = -(pinned_bit >> source_square);
+            U64 full_mask    = (pin_mask[source_square] & mask_pinned) | (~mask_pinned);
             attacks = Chess_Lookup::Fancy::Queen(source_square, occupied) & ~us_pieces & full_mask;
 
             quiet_attacks = attacks & ~them_pieces & push_mask;
@@ -1065,14 +1070,13 @@ namespace ChessBoard {
 
     static inline int test_ply;
 
-    static inline unsigned long long perft(const Board &board, const int depth) {
+    static unsigned long long perft(const Board &board, const int depth) {
         if (depth == 0) {
             return 1ULL;
         }
 
         unsigned long long nodes = 0;
         MoveList move_list;
-        move_list.count = 0;
 
         if (board.side_to_move == Side::WHITE) {
             generate_moves<Side::WHITE>(board, move_list);
@@ -1080,10 +1084,11 @@ namespace ChessBoard {
             generate_moves<Side::BLACK>(board, move_list);
         }
 
+        Board copy;
         for (int i = 0; i < move_list.count; i++) {
             const int move = move_list.moves[i];
             test_ply++;
-            Board copy = board;
+            memcpy(&copy, &board, sizeof(Board));
             if (board.side_to_move == Side::WHITE) {
                 make_move<Side::WHITE>(copy, move);
             } else {
